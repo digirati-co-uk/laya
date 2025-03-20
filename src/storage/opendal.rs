@@ -92,12 +92,10 @@ async fn open(local_root: PathBuf, path: String) -> Result<StorageObject, Storag
             (
                 Operator::new(
                     S3::default()
-                        .disable_stat_with_override()
                         .disable_ec2_metadata()
                         .region(region)
                         .bucket(bucket)
-                        .customized_credential_load(Box::new(AwsCredentialProvider))
-                        .endpoint("https://s3.amazonaws.com"),
+                        .customized_credential_load(Box::new(AwsCredentialProvider)),
                 )?
                 .layer(TracingLayer)
                 .finish(),
