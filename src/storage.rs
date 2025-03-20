@@ -5,6 +5,8 @@ use std::path::Path;
 use std::pin::Pin;
 use std::time::SystemTime;
 
+use aws_config::meta::credentials::CredentialsProviderChain;
+use aws_credential_types::provider::ProvideCredentials;
 use futures::{AsyncRead, AsyncSeek};
 use kaduceus::AsyncSeekableRead;
 

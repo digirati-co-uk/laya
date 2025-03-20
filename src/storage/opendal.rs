@@ -1,14 +1,18 @@
+use std::error::Error;
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use aws_config::meta::credentials::CredentialsProviderChain;
+use aws_credential_types::provider::ProvideCredentials;
 use chrono::Timelike;
 use hyper::Uri;
 use opendal::layers::TracingLayer;
 use opendal::services::{Fs, S3};
 use opendal::{Builder, Operator};
-use reqsign::{AwsConfig, AwsDefaultLoader};
+use reqsign::{AwsConfig, AwsCredentialLoad, AwsDefaultLoader};
+use reqwest::Client;
 use tracing::info;
 
 use super::{FileOrStream, StorageError, StorageObject, StorageProvider};
@@ -41,6 +45,27 @@ impl StorageProvider for OpenDalStorageProvider {
     }
 }
 
+pub struct AwsCredentialProvider;
+
+#[async_trait::async_trait]
+
+impl AwsCredentialLoad for AwsCredentialProvider {
+    async fn load_credential(
+        &self,
+        _: Client,
+    ) -> Result<Option<reqsign::AwsCredential>, anyhow::Error> {
+        let provider = CredentialsProviderChain::default_provider().await;
+        let credentials = provider.provide_credentials().await?;
+
+        Ok(Some(reqsign::AwsCredential {
+            access_key_id: credentials.access_key_id().into(),
+            secret_access_key: credentials.secret_access_key().into(),
+            session_token: credentials.session_token().map(|value| value.to_string()),
+            expires_in: credentials.expiry().map(|time| time.into()),
+        }))
+    }
+}
+
 #[tracing::instrument]
 async fn open(local_root: PathBuf, path: String) -> Result<StorageObject, StorageError> {
     let (operator, path) = match path.parse::<Uri>() {
@@ -70,10 +95,7 @@ async fn open(local_root: PathBuf, path: String) -> Result<StorageObject, Storag
                         .disable_ec2_metadata()
                         .region(region)
                         .bucket(bucket)
-                        .customized_credential_load(Box::new(AwsDefaultLoader::new(
-                            reqwest::Client::new(),
-                            AwsConfig::default().from_env(),
-                        )))
+                        .customized_credential_load(Box::new(AwsCredentialProvider))
                         .endpoint("https://s3.amazonaws.com"),
                 )?
                 .layer(TracingLayer)
