@@ -109,11 +109,7 @@ pub fn install_telemetry_collector(disable_otel: bool) -> TelemetryHandle {
             EnvFilter::builder()
                 .with_default_directive(Level::TRACE.into())
                 .with_env_var("LAYA_LOG")
-                .from_env_lossy()
-                .add_directive("reqwest=error".parse().unwrap())
-                .add_directive("hyper_util=error".parse().unwrap())
-                .add_directive("opentelemetry-http=error".parse().unwrap())
-                .add_directive("opendal=debug".parse().unwrap()),
+                .from_env_lossy(),
         )
         .with(
             tracer_provider
