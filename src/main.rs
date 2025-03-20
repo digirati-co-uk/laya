@@ -112,7 +112,6 @@ pub struct StorageOptions {
     /// The location the image server expects to find image files at on a local filesystem.
     #[arg(
         long("fs-storage-path"),
-        required(true),
         default_value("test-data"),
         help_heading("Storage")
     )]

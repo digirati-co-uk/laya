@@ -9,11 +9,11 @@ use http_body::Frame;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
 use hyper::body::{Bytes, Incoming};
-use hyper::header::{CONTENT_TYPE, HeaderValue, LAST_MODIFIED};
+use hyper::header::{CONTENT_TYPE, HeaderValue, IF_MODIFIED_SINCE, LAST_MODIFIED};
 use hyper::{Request, Response, StatusCode};
 use serde_json::{Value, json, to_string_pretty};
 use tower::Service;
-use tracing::{Instrument, error};
+use tracing::{Instrument, error, info};
 
 use super::service::{
     ImageServiceError, ImageServiceRequestKind, ImageServiceResponse, ImageServiceResponseKind,
@@ -96,17 +96,30 @@ where
         prefix: String,
         mut inner: S,
     ) -> Result<HttpImageServiceResponse, hyper::http::Error> {
+        info!("Decoding request for prefix {prefix}, path: {}", req.uri().path());
+
         let request_path = req
             .uri()
             .path()
             .trim_start_matches(prefix.trim_end_matches("/"))
             .to_string();
 
+        info!("Requested path: {request_path}");
+
         let request_span = tracing::Span::current();
         let request_method = req.method().to_string();
         let request = match request_path.as_str() {
             "/" => return ok_response("OK!"),
-            _ => req.try_into(),
+            _ => {
+                let last_access_time = req
+                    .headers()
+                    .get(IF_MODIFIED_SINCE)
+                    .and_then(|value| httpdate::parse_http_date(value.to_str().ok()?).ok());
+
+                request_path
+                    .parse::<ImageServiceRequest>()
+                    .map(|req| req.with_last_access_time(last_access_time))
+            }
         };
 
         match request {
