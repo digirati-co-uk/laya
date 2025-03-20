@@ -9,7 +9,7 @@ use aws_config::meta::credentials::CredentialsProviderChain;
 use aws_credential_types::provider::ProvideCredentials;
 use chrono::Timelike;
 use hyper::Uri;
-use opendal::layers::TracingLayer;
+use opendal::layers::{LoggingInterceptor, LoggingLayer, TracingLayer};
 use opendal::services::{Fs, S3};
 use opendal::{Builder, Operator};
 use reqsign::{AwsConfig, AwsCredentialLoad, AwsDefaultLoader};
@@ -32,7 +32,7 @@ impl From<opendal::Error> for StorageError {
     fn from(value: opendal::Error) -> Self {
         match value.kind() {
             opendal::ErrorKind::NotFound => StorageError::NotFound,
-            _ => StorageError::Other(value.to_string()),
+            _ => StorageError::Internal(value),
         }
     }
 }
@@ -99,6 +99,7 @@ async fn open(local_root: PathBuf, path: String) -> Result<StorageObject, Storag
                         .customized_credential_load(Box::new(AwsCredentialProvider)),
                 )?
                 .layer(TracingLayer)
+                .layer(LoggingLayer::default())
                 .finish(),
                 bucket_key.to_string(),
             )

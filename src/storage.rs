@@ -97,6 +97,7 @@ pub enum StorageError {
     AccessDenied,
     NotFound,
     Other(String),
+    Internal(::opendal::Error),
 }
 
 impl Error for StorageError {}
@@ -107,6 +108,7 @@ impl Display for StorageError {
             StorageError::AccessDenied => write!(f, "access was denied"),
             StorageError::NotFound => write!(f, "data could not be found"),
             StorageError::Other(reason) => write!(f, "other: {reason}"),
+            StorageError::Internal(e) => write!(f, "{}", e),
         }
     }
 }
