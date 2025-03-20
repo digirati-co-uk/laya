@@ -8,6 +8,7 @@ use hyper::Uri;
 use opendal::layers::TracingLayer;
 use opendal::services::{Fs, S3};
 use opendal::{Builder, Operator};
+use reqsign::{AwsConfig, AwsDefaultLoader};
 use tracing::info;
 
 use super::{FileOrStream, StorageError, StorageObject, StorageProvider};
@@ -69,6 +70,10 @@ async fn open(local_root: PathBuf, path: String) -> Result<StorageObject, Storag
                         .disable_ec2_metadata()
                         .region(region)
                         .bucket(bucket)
+                        .customized_credential_load(Box::new(AwsDefaultLoader::new(
+                            reqwest::Client::new(),
+                            AwsConfig::default().from_env(),
+                        )))
                         .endpoint("https://s3.amazonaws.com"),
                 )?
                 .layer(TracingLayer)
