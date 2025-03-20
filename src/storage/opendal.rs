@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use aws_config::ecs::EcsCredentialsProvider;
 use aws_config::meta::credentials::CredentialsProviderChain;
 use aws_credential_types::provider::ProvideCredentials;
 use chrono::Timelike;
@@ -54,7 +55,7 @@ impl AwsCredentialLoad for AwsCredentialProvider {
         &self,
         _: Client,
     ) -> Result<Option<reqsign::AwsCredential>, anyhow::Error> {
-        let provider = CredentialsProviderChain::default_provider().await;
+        let provider = EcsCredentialsProvider::builder().build();
         let credentials = provider.provide_credentials().await?;
 
         Ok(Some(reqsign::AwsCredential {
