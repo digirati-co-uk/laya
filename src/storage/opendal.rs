@@ -49,7 +49,6 @@ impl StorageProvider for OpenDalStorageProvider {
 pub struct AwsCredentialProvider;
 
 #[async_trait::async_trait]
-
 impl AwsCredentialLoad for AwsCredentialProvider {
     async fn load_credential(
         &self,
@@ -93,7 +92,9 @@ async fn open(local_root: PathBuf, path: String) -> Result<StorageObject, Storag
                 Operator::new(
                     S3::default()
                         .disable_ec2_metadata()
+                        .disable_config_load()
                         .region(region)
+                        .enable_virtual_host_style()
                         .bucket(bucket)
                         .customized_credential_load(Box::new(AwsCredentialProvider)),
                 )?
