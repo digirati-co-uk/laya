@@ -44,7 +44,10 @@ impl StorageProvider for OpenDalStorageProvider {
 async fn open(local_root: PathBuf, path: String) -> Result<StorageObject, StorageError> {
     let (operator, path) = match path.parse::<Uri>() {
         Ok(uri) if uri.scheme_str() == Some("s3") => {
-            let (region, bucket_and_path) = uri
+            let region = uri
+                .host()
+                .ok_or(StorageError::Other("invalid S3 URI specification".into()))?;
+            let (_, bucket_and_path) = uri
                 .path()
                 .split_once('/')
                 .ok_or(StorageError::Other("invalid S3 URI specification".into()))?;
