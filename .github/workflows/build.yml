@@ -132,7 +132,7 @@ jobs:
       - name: Create OCI container
         id: build
         run: |
-          container=$(buildah from --platform ${{ matrix.docker }} scratch)
+          container=$(buildah from --platform ${{ matrix.docker }} gcr.io/distroless/static)
           buildah copy $container target/${{ matrix.triple }}/release/laya /bin/laya
           buildah config --entrypoint '["/bin/laya"]' $container
 
