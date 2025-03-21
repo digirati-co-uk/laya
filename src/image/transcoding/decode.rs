@@ -4,8 +4,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 use super::TranscodingError;
-use crate::iiif::service::ImageParameters;
-use crate::iiif::{Dimension, Region, Scale, Size};
 use crate::image::{AbsoluteRegion, BoxedImage, Dimensions};
 
 pub fn decode_task(

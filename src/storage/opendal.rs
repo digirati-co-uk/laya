@@ -1,19 +1,17 @@
-use std::error::Error;
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::Arc;
 
-use aws_config::ecs::EcsCredentialsProvider;
 use aws_config::meta::credentials::CredentialsProviderChain;
 use aws_credential_types::provider::ProvideCredentials;
 use chrono::Timelike;
 use hyper::Uri;
-use opendal::layers::{LoggingInterceptor, LoggingLayer, TracingLayer};
+use opendal::Operator;
+use opendal::layers::{LoggingLayer, TracingLayer};
 use opendal::services::{Fs, S3};
-use opendal::{Builder, Operator};
-use reqsign::{AwsConfig, AwsCredentialLoad, AwsDefaultLoader};
+use reqsign::AwsCredentialLoad;
 use reqwest::Client;
+use tokio::sync::OnceCell;
 use tracing::info;
 
 use super::{FileOrStream, StorageError, StorageObject, StorageProvider};
@@ -46,7 +44,10 @@ impl StorageProvider for OpenDalStorageProvider {
     }
 }
 
-pub struct AwsCredentialProvider;
+#[derive(Default)]
+pub struct AwsCredentialProvider {
+    chain: OnceCell<CredentialsProviderChain>,
+}
 
 #[async_trait::async_trait]
 impl AwsCredentialLoad for AwsCredentialProvider {
@@ -54,7 +55,11 @@ impl AwsCredentialLoad for AwsCredentialProvider {
         &self,
         _: Client,
     ) -> Result<Option<reqsign::AwsCredential>, anyhow::Error> {
-        let provider = CredentialsProviderChain::default_provider().await;
+        let provider = self
+            .chain
+            .get_or_init(|| async { CredentialsProviderChain::default_provider().await })
+            .await;
+
         let credentials = provider.provide_credentials().await?;
 
         Ok(Some(reqsign::AwsCredential {
@@ -96,7 +101,7 @@ async fn open(local_root: PathBuf, path: String) -> Result<StorageObject, Storag
                         .region(region)
                         .enable_virtual_host_style()
                         .bucket(bucket)
-                        .customized_credential_load(Box::new(AwsCredentialProvider)),
+                        .customized_credential_load(Box::new(AwsCredentialProvider::default())),
                 )?
                 .layer(TracingLayer)
                 .layer(LoggingLayer::default())

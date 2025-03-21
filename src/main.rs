@@ -17,7 +17,6 @@ use hyper_util::service::TowerToHyperService;
 use iiif::http::HttpImageService;
 use iiif::service::ImageService;
 use kaduceus::KakaduContext;
-use opendal::services::Fs;
 use opentelemetry_http::HeaderExtractor;
 use storage::opendal::OpenDalStorageProvider;
 use tower::ServiceBuilder;

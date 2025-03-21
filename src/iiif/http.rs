@@ -13,7 +13,7 @@ use hyper::header::{CONTENT_TYPE, HeaderValue, IF_MODIFIED_SINCE, LAST_MODIFIED}
 use hyper::{Request, Response, StatusCode};
 use serde_json::{Value, json, to_string_pretty};
 use tower::Service;
-use tracing::{Instrument, error, info};
+use tracing::{error, info};
 
 use super::service::{
     ImageServiceError, ImageServiceRequestKind, ImageServiceResponse, ImageServiceResponseKind,

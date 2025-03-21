@@ -1,7 +1,6 @@
 use std::error::Error;
 use std::fmt::Display;
 use std::io::Write;
-use std::ops::Div;
 use std::pin::pin;
 use std::task::Poll;
 

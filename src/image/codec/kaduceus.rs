@@ -1,15 +1,14 @@
 use std::future::Future;
-use std::io::Write;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use bytes::{BufMut, BytesMut};
+use bytes::BytesMut;
 use kaduceus::{KakaduContext, KakaduDecompressor, KakaduImage};
 use tokio::runtime::{Builder, Runtime};
 use tracing::info;
 
 use super::ImageReader;
-use crate::iiif::{Dimension, Region};
+use crate::iiif::Dimension;
 use crate::image::info::{ImageInfo, PreferredSize, Tile};
 use crate::image::{AbsoluteRegion, BoxedImage, Image, ImageDecoder};
 use crate::storage::FileOrStream;

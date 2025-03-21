@@ -11,7 +11,7 @@ pub mod transcoding;
 pub use codec::ImageReader;
 use info::ImageInfo;
 
-use crate::iiif::{Dimension, Region};
+use crate::iiif::Dimension;
 
 pub type Dimensions = (Dimension, Dimension);
 
