@@ -127,7 +127,7 @@ jobs:
           cp target/${{ matrix.triple }}/release/laya artifacts/laya-${{ matrix.name }}
         env:
           TARGET_CPU: ${{ matrix.cpu }}
-          RUSTFLAGS: "-Ctarget-cpu=${{ matrix.cpu }} -Ctarget-feature=+crt-static"
+          RUSTFLAGS: "-Ctarget-cpu=${{ matrix.cpu }} -Ctarget-feature=+crt-static -Clink-arg=-Wl,--thinlto-cache-dir=${{github.workspace}}/target/lto"
 
       - name: Create OCI container
         id: build
