@@ -151,7 +151,16 @@ impl TranscodingPipeline {
 
                 (scaled_x.ceil() as u32, scaled_y.ceil() as u32)
             }
-            Scale::AspectPreserving { .. } => todo!(),
+            Scale::AspectPreserving { width, height } => {
+                let scale_w = height.get() as f64 / absolute_region.width as f64;
+                let scale_h = width.get() as f64 / absolute_region.height as f64;
+                let scale = scale_w.min(scale_h);
+
+                let new_w = (absolute_region.width as f64 * scale).floor() as u32;
+                let new_h = (absolute_region.height as f64 * scale).floor() as u32;
+
+                (new_w, new_h)
+            }
         };
 
         info!("Calculated dimensions ({size:?}) for scale params: {:?}", params.size.scale());

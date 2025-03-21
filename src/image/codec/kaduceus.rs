@@ -95,7 +95,12 @@ impl ImageDecoder for KakaduDecompressor {
             buffer.set_len(buffer.len() + region.width as usize * region.height as usize * 3);
         }
 
-        info!(region=?region, "processed a region");
+        let complete = region.width == 0 || region.height == 0;
+        if complete {
+            info!("decoded whole region");
+        } else {
+            info!(region=?region, "processed a subregion");
+        }
 
         region.width == 0 || region.height == 0
     }

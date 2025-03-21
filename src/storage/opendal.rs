@@ -54,7 +54,7 @@ impl AwsCredentialLoad for AwsCredentialProvider {
         &self,
         _: Client,
     ) -> Result<Option<reqsign::AwsCredential>, anyhow::Error> {
-        let provider = EcsCredentialsProvider::builder().build();
+        let provider = CredentialsProviderChain::default_provider().await;
         let credentials = provider.provide_credentials().await?;
 
         Ok(Some(reqsign::AwsCredential {
