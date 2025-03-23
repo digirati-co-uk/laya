@@ -31,7 +31,7 @@ use tracing_opentelemetry_instrumentation_sdk::http::{
     http_flavor, http_host, http_method, url_scheme, user_agent,
 };
 
-use crate::image::codec::KaduceusImageReader;
+use crate::image::reader::KaduceusImageReader;
 
 #[derive(Clone, Default, Debug, clap::ValueEnum)]
 pub enum Runtime {

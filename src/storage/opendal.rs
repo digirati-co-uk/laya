@@ -1,17 +1,21 @@
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
+use std::time::SystemTime;
 
+use aws_config::ecs::EcsCredentialsProvider;
 use aws_config::meta::credentials::CredentialsProviderChain;
+use aws_credential_types::Credentials;
 use aws_credential_types::provider::ProvideCredentials;
 use chrono::Timelike;
 use hyper::Uri;
+use mediatype::{MediaType, MediaTypeBuf};
 use opendal::Operator;
 use opendal::layers::{LoggingLayer, TracingLayer};
 use opendal::services::{Fs, S3};
 use reqsign::AwsCredentialLoad;
 use reqwest::Client;
-use tokio::sync::OnceCell;
+use tokio::sync::{OnceCell, RwLock};
 use tracing::info;
 
 use super::{FileOrStream, StorageError, StorageObject, StorageProvider};
@@ -45,29 +49,50 @@ impl StorageProvider for OpenDalStorageProvider {
 }
 
 #[derive(Default)]
-pub struct AwsCredentialProvider {
+pub struct SdkCredentialLoader {
     chain: OnceCell<CredentialsProviderChain>,
+    current_credentials: RwLock<Option<Credentials>>,
 }
 
 #[async_trait::async_trait]
-impl AwsCredentialLoad for AwsCredentialProvider {
+impl AwsCredentialLoad for SdkCredentialLoader {
     async fn load_credential(
         &self,
         _: Client,
     ) -> Result<Option<reqsign::AwsCredential>, anyhow::Error> {
+        fn map_creds(sdk_credentials: &Credentials) -> reqsign::AwsCredential {
+            reqsign::AwsCredential {
+                access_key_id: sdk_credentials.access_key_id().into(),
+                secret_access_key: sdk_credentials.secret_access_key().into(),
+                session_token: sdk_credentials
+                    .session_token()
+                    .map(|value| value.to_string()),
+                expires_in: sdk_credentials.expiry().map(|time| time.into()),
+            }
+        }
+
+        if let Some(credentials) = &*self.current_credentials.read().await {
+            if credentials
+                .expiry()
+                .is_some_and(|expiry| SystemTime::now() < expiry)
+                || credentials.expiry().is_none()
+            {
+                return Ok(Some(map_creds(credentials)));
+            }
+        }
+
         let provider = self
             .chain
             .get_or_init(|| async { CredentialsProviderChain::default_provider().await })
             .await;
 
-        let credentials = provider.provide_credentials().await?;
+        let sdk_credentials = provider.provide_credentials().await?;
+        let reqsign_credentials = map_creds(&sdk_credentials);
 
-        Ok(Some(reqsign::AwsCredential {
-            access_key_id: credentials.access_key_id().into(),
-            secret_access_key: credentials.secret_access_key().into(),
-            session_token: credentials.session_token().map(|value| value.to_string()),
-            expires_in: credentials.expiry().map(|time| time.into()),
-        }))
+        let mut current_creds = self.current_credentials.write().await;
+        current_creds.replace(sdk_credentials);
+
+        Ok(Some(reqsign_credentials))
     }
 }
 
@@ -101,7 +126,7 @@ async fn open(local_root: PathBuf, path: String) -> Result<StorageObject, Storag
                         .region(region)
                         .enable_virtual_host_style()
                         .bucket(bucket)
-                        .customized_credential_load(Box::new(AwsCredentialProvider::default())),
+                        .customized_credential_load(Box::new(SdkCredentialLoader::default())),
                 )?
                 .layer(TracingLayer)
                 .layer(LoggingLayer::default())
@@ -120,8 +145,19 @@ async fn open(local_root: PathBuf, path: String) -> Result<StorageObject, Storag
     };
 
     let stat = operator.stat(&path).await?;
+    let last_modified = stat
+        .last_modified()
+        .and_then(|date| date.with_nanosecond(0))
+        .map(SystemTime::from);
+
+    let media_type = stat
+        .content_type()
+        .and_then(|value| value.parse::<MediaTypeBuf>().ok())
+        .ok_or(StorageError::UnknownFormat)?;
+
     let reader = operator
-        .reader(&path)
+        .reader_with(&path)
+        .concurrent(8)
         .await?
         .into_futures_async_read(..)
         .await?;
@@ -129,8 +165,7 @@ async fn open(local_root: PathBuf, path: String) -> Result<StorageObject, Storag
     Ok(StorageObject {
         name: Some(path),
         content: FileOrStream::Stream(Box::new(reader)),
-        last_modified: stat
-            .last_modified()
-            .map(|utc| utc.with_nanosecond(0).unwrap().into()),
+        last_modified,
+        media_type,
     })
 }

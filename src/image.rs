@@ -4,12 +4,12 @@ use bytes::{Bytes, BytesMut};
 use futures::Stream;
 use mediatype::MediaTypeBuf;
 
-pub mod codec;
 pub mod info;
+pub mod reader;
 pub mod transcoding;
 
-pub use codec::ImageReader;
 use info::ImageInfo;
+pub use reader::ImageReader;
 
 use crate::iiif::Dimension;
 

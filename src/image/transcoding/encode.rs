@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 use super::{SenderWriter, TranscodingError};
 use crate::image::Dimensions;
@@ -17,6 +18,7 @@ pub fn encode_task(
         let (width, height) = output_size;
         let mut compressor = mozjpeg::Compress::new(mozjpeg::ColorSpace::JCS_EXT_RGB);
         compressor.set_size(width as usize, height as usize);
+        compressor.set_fastest_defaults();
 
         let writer = SenderWriter::new(output_channel);
         let mut output = compressor.start_compress(writer)?;
@@ -28,6 +30,7 @@ pub fn encode_task(
 
             if let Some(input) = input_channel.blocking_recv() {
                 output.write_scanlines(&input[..])?;
+                info!("encoded {} pixels", input.len() / 3);
             } else {
                 break;
             }

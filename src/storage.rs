@@ -6,6 +6,7 @@ use std::pin::Pin;
 use std::time::SystemTime;
 
 use kaduceus::AsyncSeekableRead;
+use mediatype::MediaTypeBuf;
 
 pub mod opendal;
 
@@ -16,9 +17,10 @@ pub type FileStreamProvider = Box<dyn FnOnce(&Path) -> Box<dyn AsyncSeekableRead
 /// This structure represents a stored object with optional metadata
 /// such as a name and last modification time, along with its contents.
 pub struct StorageObject {
-    pub name: Option<String>,
-    pub last_modified: Option<SystemTime>,
     pub content: FileOrStream,
+    pub last_modified: Option<SystemTime>,
+    pub media_type: MediaTypeBuf,
+    pub name: Option<String>,
 }
 
 /// Provides storage for data identified by unique string identifiers.
@@ -92,9 +94,10 @@ impl FileOrStream {
 #[derive(Debug)]
 pub enum StorageError {
     AccessDenied,
+    Internal(::opendal::Error),
     NotFound,
     Other(String),
-    Internal(::opendal::Error),
+    UnknownFormat,
 }
 
 impl Error for StorageError {}
@@ -106,6 +109,9 @@ impl Display for StorageError {
             StorageError::NotFound => write!(f, "data could not be found"),
             StorageError::Other(reason) => write!(f, "other: {reason}"),
             StorageError::Internal(e) => write!(f, "{}", e),
+            StorageError::UnknownFormat => {
+                write!(f, "the file format of the storage object is unknown")
+            }
         }
     }
 }

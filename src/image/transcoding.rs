@@ -101,7 +101,7 @@ impl Write for SenderWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         self.buffer.put(buf);
 
-        if self.buffer.len() >= 4096 {
+        if self.buffer.len() >= 4096 * 16 {
             self.flush()?;
         }
 
@@ -110,7 +110,9 @@ impl Write for SenderWriter {
 
     fn flush(&mut self) -> std::io::Result<()> {
         self.sender
-            .blocking_send(std::mem::take(&mut self.buffer).freeze())
+            .blocking_send(
+                std::mem::replace(&mut self.buffer, BytesMut::with_capacity(4096 * 16)).freeze(),
+            )
             .map_err(std::io::Error::other)
     }
 }

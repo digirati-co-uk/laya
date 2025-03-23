@@ -11,9 +11,11 @@ use http_body_util::{BodyExt, Empty, Full, StreamBody};
 use hyper::body::{Bytes, Incoming};
 use hyper::header::{CONTENT_TYPE, HeaderValue, IF_MODIFIED_SINCE, LAST_MODIFIED};
 use hyper::{Request, Response, StatusCode};
+use mediatype::MediaType;
+use mediatype::names::{PLAIN, TEXT};
 use serde_json::{Value, json, to_string_pretty};
 use tower::Service;
-use tracing::{error, info};
+use tracing::{Instrument, error, info};
 
 use super::service::{
     ImageServiceError, ImageServiceRequestKind, ImageServiceResponse, ImageServiceResponseKind,
@@ -109,7 +111,8 @@ where
         let request_span = tracing::Span::current();
         let request_method = req.method().to_string();
         let request = match request_path.as_str() {
-            "/" => return ok_response("OK!"),
+            "/" => return text_response(StatusCode::OK, "OK!"),
+            "/favicon.ico" => return text_response(StatusCode::NOT_FOUND, "File not found!"),
             _ => {
                 let last_access_time = req
                     .headers()
@@ -135,11 +138,15 @@ where
 
                 request_span.record("otel.name", format!("{} {route}", request_method));
 
-                match inner.call(request).await {
+                match inner.call(request).instrument(request_span).await {
                     Ok(response) => response.try_into(),
-                    Err(ImageServiceError::Storage(StorageError::NotFound)) => Response::builder()
-                        .status(StatusCode::NOT_FOUND)
-                        .body(text_body("Image file not found")),
+                    Err(ImageServiceError::Storage(StorageError::NotFound)) => {
+                        text_response(StatusCode::NOT_FOUND, "Image file not found")
+                    }
+                    Err(ImageServiceError::ReaderUnsupported(ty)) => Response::builder()
+                        .status(StatusCode::NOT_IMPLEMENTED)
+                        .header(CONTENT_TYPE, MediaType::new(TEXT, PLAIN).to_string())
+                        .body(text_body(format!("No readers found for {}", ty.as_str()))),
                     Err(e) => {
                         error!("failed to handle an image service request: {e:?}");
 
@@ -246,9 +253,13 @@ pub fn text_body<S: Into<String>>(body: S) -> HttpImageServiceBody {
         .boxed()
 }
 
-fn ok_response<S: Into<String>>(body: S) -> Result<HttpImageServiceResponse, hyper::http::Error> {
+fn text_response<S: Into<String>>(
+    status: StatusCode,
+    body: S,
+) -> Result<HttpImageServiceResponse, hyper::http::Error> {
     Response::builder()
-        .status(StatusCode::OK)
+        .status(status)
+        .header(CONTENT_TYPE, "text/plain")
         .body(text_body(body))
 }
 

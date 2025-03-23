@@ -10,6 +10,7 @@ use futures::FutureExt;
 use hyper::Request;
 use hyper::body::Incoming;
 use hyper::header::IF_MODIFIED_SINCE;
+use mediatype::MediaTypeBuf;
 use tower::Service;
 use tracing::{Instrument, info_span};
 
@@ -108,12 +109,18 @@ impl ImageServiceRequest {
 #[derive(Debug)]
 pub enum ImageServiceError {
     Storage(StorageError),
+    ReaderUnsupported(MediaTypeBuf),
 }
 
 impl Error for ImageServiceError {}
 impl Display for ImageServiceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        match self {
+            ImageServiceError::Storage(err) => write!(f, "{}", err),
+            ImageServiceError::ReaderUnsupported(ty) => {
+                write!(f, "no reader supports the media type ({}) of the image", ty.as_str())
+            }
+        }
     }
 }
 
@@ -159,6 +166,10 @@ impl Service<ImageServiceRequest> for ImageService {
                         kind: ImageServiceResponseKind::CacheHit,
                         last_modified_time: data.last_modified,
                     });
+                }
+
+                if !reader.is_supported_media(data.media_type.to_ref()) {
+                    return Err(ImageServiceError::ReaderUnsupported(data.media_type));
                 }
 
                 let image = reader.read(data.name, data.content).await;

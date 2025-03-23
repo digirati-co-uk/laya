@@ -5,6 +5,7 @@ use crate::storage::FileOrStream;
 
 mod kaduceus;
 pub use kaduceus::KaduceusImageReader;
+use mediatype::MediaType;
 
 use super::BoxedImage;
 
@@ -28,6 +29,8 @@ use super::BoxedImage;
 /// }
 /// ```
 pub trait ImageReader: Send + Sync {
+    fn is_supported_media(&self, media: MediaType) -> bool;
+
     fn read<'a>(
         &'a self,
         name: Option<String>,
@@ -43,6 +46,10 @@ impl ImageReader for Box<dyn ImageReader> {
     ) -> Pin<Box<dyn Future<Output = BoxedImage> + Send + 'a>> {
         <dyn ImageReader>::read(self, name, location)
     }
+
+    fn is_supported_media(&self, media: MediaType) -> bool {
+        <dyn ImageReader>::is_supported_media(self, media)
+    }
 }
 
 impl<T: ImageReader> ImageReader for Box<T> {
@@ -52,5 +59,9 @@ impl<T: ImageReader> ImageReader for Box<T> {
         location: FileOrStream,
     ) -> Pin<Box<dyn Future<Output = BoxedImage> + Send + 'a>> {
         T::read(self, name, location)
+    }
+
+    fn is_supported_media(&self, media: MediaType) -> bool {
+        T::is_supported_media(self, media)
     }
 }

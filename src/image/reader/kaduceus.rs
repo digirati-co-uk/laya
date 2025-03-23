@@ -4,6 +4,8 @@ use std::sync::Arc;
 
 use bytes::BytesMut;
 use kaduceus::{KakaduContext, KakaduDecompressor, KakaduImage};
+use mediatype::MediaType;
+use mediatype::names::{IMAGE, JP2};
 use tokio::runtime::{Builder, Runtime};
 use tracing::info;
 
@@ -83,6 +85,7 @@ impl ImageDecoder for KakaduDecompressor {
     fn decode_to(&mut self, buffer: &mut BytesMut) -> bool {
         let uninit = buffer.spare_capacity_mut();
 
+        info!("starting region decode");
         // SAFETY: the buffer is never read by `process`
         let uninit_buf = unsafe {
             std::mem::transmute::<&mut [std::mem::MaybeUninit<u8>], &mut [u8]>(&mut uninit[..])
@@ -135,5 +138,9 @@ impl ImageReader for KaduceusImageReader {
             .await
             .unwrap()
         })
+    }
+
+    fn is_supported_media(&self, media: mediatype::MediaType) -> bool {
+        media.essence() == MediaType::from_parts(IMAGE, JP2, None, &[])
     }
 }
