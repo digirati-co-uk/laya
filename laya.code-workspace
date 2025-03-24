@@ -78,7 +78,10 @@
 			"ios": "cpp",
 			"locale": "cpp",
 			"queue": "cpp",
-			"stack": "cpp"
+			"stack": "cpp",
+			"*.tpp": "cpp",
+			"__tree": "cpp",
+			"fstream": "cpp"
 		}
 	}
 }

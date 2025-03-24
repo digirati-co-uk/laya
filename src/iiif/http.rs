@@ -2,15 +2,17 @@ use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::future::Future;
 use std::pin::Pin;
+use std::str::FromStr;
 use std::task::Poll;
 
 use futures::StreamExt;
+use http::uri::PathAndQuery;
 use http_body::Frame;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
 use hyper::body::{Bytes, Incoming};
 use hyper::header::{CONTENT_TYPE, HeaderValue, IF_MODIFIED_SINCE, LAST_MODIFIED};
-use hyper::{Request, Response, StatusCode};
+use hyper::{Request, Response, StatusCode, Uri};
 use mediatype::MediaType;
 use mediatype::names::{PLAIN, TEXT};
 use serde_json::{Value, json, to_string_pretty};
@@ -125,8 +127,10 @@ where
 
                 request_span.record("otel.name", format!("{} {route}", request_method));
 
+                let image_id = request.identifier.clone();
+
                 match inner.call(request).instrument(request_span).await {
-                    Ok(response) => response.try_into(),
+                    Ok(response) => iiif_response(&image_id, req.uri(), response),
                     Err(ImageServiceError::Storage(StorageError::NotFound)) => {
                         text_response(StatusCode::NOT_FOUND, "Image file not found")
                     }
@@ -150,90 +154,95 @@ where
     }
 }
 
-impl TryInto<HttpImageServiceResponse> for ImageServiceResponse {
-    type Error = hyper::http::Error;
+pub fn iiif_response(
+    image_id: &str,
+    original_request_uri: &Uri,
+    response: ImageServiceResponse,
+) -> Result<HttpImageServiceResponse, hyper::http::Error> {
+    let mut builder = Response::builder();
+    let headers = builder.headers_mut().unwrap();
 
-    fn try_into(self) -> Result<HttpImageServiceResponse, Self::Error> {
-        let mut response = Response::builder();
-        let headers = response.headers_mut().unwrap();
+    if let Some(Ok(value)) = response
+        .last_modified_time
+        .map(httpdate::fmt_http_date)
+        .map(|value| HeaderValue::from_str(&value))
+    {
+        headers.append(LAST_MODIFIED, value);
+    }
 
-        if let Some(Ok(value)) = self
-            .last_modified_time
-            .map(httpdate::fmt_http_date)
-            .map(|value| HeaderValue::from_str(&value))
-        {
-            headers.append(LAST_MODIFIED, value);
+    match response.kind {
+        ImageServiceResponseKind::CacheHit => Response::builder()
+            .status(StatusCode::NOT_MODIFIED)
+            .body(BodyExt::boxed(Empty::new().map_err(|_| unreachable!()))),
+
+        ImageServiceResponseKind::Image(image) => {
+            let body = StreamBody::new(image.data.map(|data| data.map(Frame::data)));
+
+            builder
+                .status(StatusCode::OK)
+                .header(CONTENT_TYPE, image.media_type.canonicalize().to_string())
+                .body(BodyExt::boxed(body))
         }
+        ImageServiceResponseKind::Info(info) => {
+            let mut id_parts = original_request_uri.clone().into_parts();
+            id_parts.path_and_query = Some(format!("/{image_id}").parse()?);
 
-        match self.kind {
-            ImageServiceResponseKind::CacheHit => Response::builder()
-                .status(StatusCode::NOT_MODIFIED)
-                .body(BodyExt::boxed(Empty::new().map_err(|_| unreachable!()))),
+            let id = Uri::from_parts(id_parts)?;
 
-            ImageServiceResponseKind::Image(image) => {
-                let body = StreamBody::new(image.data.map(|data| data.map(Frame::data)));
+            let mut document = json!({
+                "@context": "http://iiif.io/api/image/3/context.json",
+                "type": "ImageService3",
+                "id": id.to_string(),
+                "protocol": "http://iiif.io/api/image",
+                "profile": "level0",
+                "width": info.width,
+                "height": info.height,
+            });
 
-                response
-                    .status(StatusCode::OK)
-                    .header(CONTENT_TYPE, image.media_type.canonicalize().to_string())
-                    .body(BodyExt::boxed(body))
-            }
-            ImageServiceResponseKind::Info(info) => {
-                let mut document = json!({
-                    "@context": "http://iiif.io/api/image/3/context.json",
-                    "type": "ImageService3",
-                    "protocol": "http://iiif.io/api/image",
-                    "profile": "level0",
-                    "width": info.width,
-                    "height": info.height,
-                });
-
-                if let Some(sizes) = &info.sizes {
-                    let sizes_documents: Vec<Value> = sizes
-                        .iter()
-                        .map(|size| {
-                            json!({
-                                "type": "Size",
-                                "width": size.width,
-                                "height": size.height,
-                            })
+            if let Some(sizes) = &info.sizes {
+                let sizes_documents: Vec<Value> = sizes
+                    .iter()
+                    .map(|size| {
+                        json!({
+                            "type": "Size",
+                            "width": size.width,
+                            "height": size.height,
                         })
-                        .collect();
+                    })
+                    .collect();
 
-                    document["sizes"] = json!(sizes_documents)
-                }
-
-                if let Some(tiles) = &info.tiles {
-                    let tile_documents: Vec<Value> = tiles
-                        .iter()
-                        .map(|tile| {
-                            json!({
-                                "type": "Tile",
-                                "width": tile.width,
-                                "height": tile.height,
-                                "scaleFactors": tile.scale_factors
-                            })
-                        })
-                        .collect();
-
-                    document["tiles"] = json!(tile_documents);
-                }
-
-                if let Some(rights) = &info.rights {
-                    document["rights"] = json!(rights);
-                }
-
-                let body = to_string_pretty(&document).expect("failed to serialize info.json");
-
-                response
-                    .status(StatusCode::OK)
-                    .header(CONTENT_TYPE, "application/ld+json")
-                    .body(text_body(body))
+                document["sizes"] = json!(sizes_documents)
             }
+
+            if let Some(tiles) = &info.tiles {
+                let tile_documents: Vec<Value> = tiles
+                    .iter()
+                    .map(|tile| {
+                        json!({
+                            "type": "Tile",
+                            "width": tile.width,
+                            "height": tile.height,
+                            "scaleFactors": tile.scale_factors
+                        })
+                    })
+                    .collect();
+
+                document["tiles"] = json!(tile_documents);
+            }
+
+            if let Some(rights) = &info.rights {
+                document["rights"] = json!(rights);
+            }
+
+            let body = to_string_pretty(&document).expect("failed to serialize info.json");
+
+            builder
+                .status(StatusCode::OK)
+                .header(CONTENT_TYPE, "application/ld+json")
+                .body(text_body(body))
         }
     }
 }
-
 pub fn text_body<S: Into<String>>(body: S) -> HttpImageServiceBody {
     Full::<Bytes>::from(body.into())
         .map_err(|_| unreachable!())
