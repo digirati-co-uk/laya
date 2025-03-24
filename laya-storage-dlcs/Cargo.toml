@@ -1,0 +1,19 @@
+[package]
+name = "laya-storage-dlcs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+laya-storage = { path = "../laya-storage" }
+reqwest = "0.12.15"
+reqsign = "0.16.1"
+aws-config = "1.6.0"
+aws-credential-types = "1.2.2"
+opendal = { version = "0.52", features = ["layers-tracing", "services-s3", "services-fs", "internal-path-cache", "layers-mime-guess"] }
+mediatype.workspace = true
+chrono = "0.4.40"
+tracing = "0.1.41"
+tokio = { version = "1.44.1", features = ["sync"] }
+hyper = "1.6.0"
+futures.workspace = true
+anyhow = "1.0.97"

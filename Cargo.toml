@@ -6,6 +6,9 @@ license = "Apache-2.0 OR MIT"
 publish = false
 rust-version = "1.85"
 
+[workspace]
+members = ["laya-storage", "laya-storage-dlcs"]
+
 # Config for 'cargo dist'
 [[workspace.metadata.distributions]]
 name = "x64-generic"
@@ -67,11 +70,13 @@ rt-tokio = ["dep:tokio"]
 rt-glommio = []
 
 [dependencies]
+laya-storage = { path = "laya-storage" }
+laya-storage-dlcs = { path = "laya-storage-dlcs" }
 byte-unit = { version = "5.1.6", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
 color-eyre = { version = "0.6" }
 kaduceus = { version = "0.1.0", git = "https://github.com/digirati-co-uk/kaduceus", optional = true }
-futures = { version = "0.3" }
+futures = { workspace = true }
 http-body = { version = "1" }
 http-body-util = { version = "0.1" }
 hyper = { version = "1.6", features = ["server", "http2", "http1"] }
@@ -87,6 +92,7 @@ opendal = { version = "0.52", optional = true, features = [
     "layers-tracing",
     "services-s3",
     "services-fs",
+    "internal-path-cache",
 ] }
 opentelemetry = { version = "0.28", features = ["trace", "metrics"] }
 opentelemetry-appender-tracing = { version = "0.28", features = [
@@ -133,11 +139,12 @@ tower-http = { version = "0.6", features = [
     "timeout",
     "trace",
     "tracing",
+    "metrics",
 ] }
 urlencoding = { version = "2" }
 bytes = "1.10.1"
 tokio-util = { version = "0.7.13", features = ["io"] }
-mediatype = "0.19.20"
+mediatype = { workspace = true }
 palette = "0.7.6"
 chrono = "0.4.40"
 httpdate = "1.0.3"
@@ -151,3 +158,7 @@ aws-config = "1.6.0"
 aws-credential-types = "1.2.2"
 async-trait = "0.1.88"
 anyhow = "1.0.97"
+
+[workspace.dependencies]
+futures = "0.3"
+mediatype = "0.19"

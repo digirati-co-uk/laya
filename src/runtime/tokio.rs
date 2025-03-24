@@ -1,29 +1,23 @@
 use std::error::Error;
-use std::fmt::Display;
 
-use http_body_util::combinators::BoxBody;
-use hyper::body::{Bytes, Incoming};
+use http_body::Body;
+use hyper::body::Incoming;
 use hyper::service::Service;
 use hyper::{Request, Response};
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use tokio::net::TcpListener;
-use tower_http::classify::{NeverClassifyEos, ServerErrorsFailureClass};
-use tower_http::trace::ResponseBody;
 use tracing::info;
 
 use crate::LayaOptions;
 
-pub fn serve<S, E>(options: LayaOptions, service: S)
+pub fn serve<S, B>(options: LayaOptions, service: S)
 where
-    S: Service<
-            Request<Incoming>,
-            Response = Response<
-                ResponseBody<BoxBody<Bytes, E>, NeverClassifyEos<ServerErrorsFailureClass>>,
-            >,
-        > + Clone
-        + Send
-        + 'static,
-    E: Into<Box<dyn Error + Send + Sync>> + Send + Sync + Display + 'static,
+    S: Service<Request<Incoming>, Response = Response<B>> + Send + Clone + 'static,
+    S::Future: 'static,
+    S::Error: Into<Box<dyn Error + Send + Sync>>,
+    B: Body + Send + 'static,
+    B::Data: Send + 'static,
+    B::Error: Into<Box<dyn Error + Send + Sync>>,
     S::Error: Error + Send + Sync + 'static,
     S::Future: Send + 'static,
 {

@@ -4,7 +4,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::Poll;
 
-use futures::{Stream, StreamExt};
+use futures::StreamExt;
 use http_body::Frame;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
@@ -61,19 +61,6 @@ where
         _cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
-    }
-}
-
-pub struct BytesStream(Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send + Sync + Unpin>);
-
-impl Stream for BytesStream {
-    type Item = Result<Bytes, std::io::Error>;
-
-    fn poll_next(
-        mut self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> Poll<Option<Self::Item>> {
-        self.as_mut().0.poll_next_unpin(cx)
     }
 }
 

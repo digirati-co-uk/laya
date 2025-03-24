@@ -5,12 +5,13 @@ use std::path::Path;
 use std::pin::Pin;
 use std::time::SystemTime;
 
-use kaduceus::AsyncSeekableRead;
+use futures::{AsyncRead, AsyncSeek};
 use mediatype::MediaTypeBuf;
 
-pub mod opendal;
+pub type FileStreamProvider = Box<dyn FnOnce(&Path) -> Box<dyn SeekableStream> + Send>;
 
-pub type FileStreamProvider = Box<dyn FnOnce(&Path) -> Box<dyn AsyncSeekableRead> + Send>;
+pub trait SeekableStream: AsyncRead + AsyncSeek {}
+impl<T: AsyncRead + AsyncSeek> SeekableStream for T {}
 
 /// An object stored by a storage provider.
 ///
@@ -27,10 +28,12 @@ pub struct StorageObject {
 pub trait StorageProvider: Send + Sync {
     /// Opens a handle to the random-access storage identified by the unique id `id`.
     /// The storage may point to an asynchronous stream, or a locally available file.
-    fn open(
-        &self,
+    fn open<'a, 'fut>(
+        &'a self,
         id: &str,
-    ) -> Pin<Box<dyn Future<Output = Result<StorageObject, StorageError>> + Send>>;
+    ) -> Pin<Box<dyn Future<Output = Result<StorageObject, StorageError>> + Send + 'fut>>
+    where
+        'a: 'fut;
 
     fn healthcheck(&self) -> Pin<Box<dyn Future<Output = Result<(), StorageError>> + Send>> {
         Box::pin(futures::future::ready(Ok(())))
@@ -38,19 +41,25 @@ pub trait StorageProvider: Send + Sync {
 }
 
 impl<T: StorageProvider> StorageProvider for Box<T> {
-    fn open(
-        &self,
+    fn open<'a, 'fut>(
+        &'a self,
         id: &str,
-    ) -> Pin<Box<dyn Future<Output = Result<StorageObject, StorageError>> + Send>> {
+    ) -> Pin<Box<dyn Future<Output = Result<StorageObject, StorageError>> + Send + 'fut>>
+    where
+        'a: 'fut,
+    {
         T::open(self, id)
     }
 }
 
 impl StorageProvider for Box<dyn StorageProvider> {
-    fn open(
-        &self,
+    fn open<'a, 'fut>(
+        &'a self,
         id: &str,
-    ) -> Pin<Box<dyn Future<Output = Result<StorageObject, StorageError>> + Send>> {
+    ) -> Pin<Box<dyn Future<Output = Result<StorageObject, StorageError>> + Send + 'fut>>
+    where
+        'a: 'fut,
+    {
         <dyn StorageProvider>::open(self, id)
     }
 }
@@ -78,12 +87,12 @@ pub enum FileOrStream {
     File(FileStream),
 
     /// Storage represented by a seekable stream.
-    Stream(Box<dyn AsyncSeekableRead + Send>),
+    Stream(Box<dyn SeekableStream + Send>),
 }
 
 impl FileOrStream {
     /// Get the contents of this value as an asynchronus stream, regardless of local availability.
-    pub fn as_stream(self) -> Box<dyn AsyncSeekableRead> {
+    pub fn as_stream(self) -> Box<dyn SeekableStream> {
         match self {
             FileOrStream::File(stream) => (stream.stream_factory)(&stream.path),
             FileOrStream::Stream(stream) => stream,
@@ -94,7 +103,7 @@ impl FileOrStream {
 #[derive(Debug)]
 pub enum StorageError {
     AccessDenied,
-    Internal(::opendal::Error),
+    Internal(Box<dyn Error + Send + Sync>),
     NotFound,
     Other(String),
     UnknownFormat,

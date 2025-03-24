@@ -1,8 +1,10 @@
 pub mod iiif;
 pub mod image;
 pub mod runtime;
-pub mod storage;
 pub mod telemetry;
+pub mod storage {
+    pub use laya_storage::*;
+}
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -12,19 +14,20 @@ use byte_unit::Byte;
 use clap::Parser;
 use hyper::body::Incoming;
 use hyper::header::{AUTHORIZATION, COOKIE};
-use hyper::{Request, Response};
+use hyper::{Method, Request, Response};
 use hyper_util::service::TowerToHyperService;
 use iiif::http::HttpImageService;
 use iiif::service::ImageService;
 use kaduceus::KakaduContext;
+use laya_storage_dlcs::DlcsStorageProvider;
 use opentelemetry_http::HeaderExtractor;
-use storage::opendal::OpenDalStorageProvider;
 use tower::ServiceBuilder;
+use tower_http::cors::{Any, CorsLayer};
 use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
 use tower_http::timeout::TimeoutLayer;
-use tower_http::trace::TraceLayer;
+use tower_http::trace::{DefaultOnEos, TraceLayer};
 use tracing::field::Empty;
-use tracing::info_span;
+use tracing::{Level, info_span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 use tracing_opentelemetry_instrumentation_sdk::http::http_server::update_span_from_response;
 use tracing_opentelemetry_instrumentation_sdk::http::{
@@ -144,9 +147,10 @@ fn main() -> color_eyre::Result<()> {
     let kdu_image_reader = KaduceusImageReader::new(kdu_context);
 
     let image_service = ImageService::new(
-        OpenDalStorageProvider::new(options.storage_options.fs_storage_path.clone()),
+        DlcsStorageProvider::new(options.storage_options.fs_storage_path.clone()),
         kdu_image_reader,
     );
+
     let http_service = HttpImageService::new_with_prefix(image_service, &options.prefix);
     let tower_service = ServiceBuilder::new()
         .layer(SetSensitiveRequestHeadersLayer::new([AUTHORIZATION, COOKIE]))
@@ -182,7 +186,13 @@ fn main() -> color_eyre::Result<()> {
                 })
                 .on_response(|response: &Response<_>, _: Duration, span: &tracing::Span| {
                     update_span_from_response(span, response)
-                }),
+                })
+                .on_eos(DefaultOnEos::default().level(Level::INFO)),
+        )
+        .layer(
+            CorsLayer::new()
+                .allow_methods([Method::GET])
+                .allow_origin(Any),
         )
         .layer(TimeoutLayer::new(Duration::from_secs(10)))
         .service(http_service);
