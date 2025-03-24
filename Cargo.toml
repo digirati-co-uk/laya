@@ -101,7 +101,7 @@ opentelemetry-appender-tracing = { version = "0.28", features = [
     "experimental_use_tracing_span_context",
 ] }
 opentelemetry-aws = "0.16.0"
-opentelemetry-http = { version = "0.28" }
+opentelemetry-http = { version = "0.29" }
 opentelemetry_sdk = { version = "0.28", default-features = false, features = [
     "trace",
     "rt-tokio",
