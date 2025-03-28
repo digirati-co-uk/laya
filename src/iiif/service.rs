@@ -91,13 +91,7 @@ impl ImageServiceRequest {
         ImageServiceRequest {
             identifier: identifier.into(),
             last_access_time: None,
-            kind: ImageServiceRequestKind::Image(ImageParameters {
-                region,
-                size,
-                rotation,
-                quality,
-                format,
-            }),
+            kind: ImageServiceRequestKind::Image(ImageParameters { region, size, rotation, quality, format }),
         }
     }
 
@@ -174,9 +168,9 @@ impl Service<ImageServiceRequest> for ImageService {
 
                 let image = reader.read(data.name, data.content).await;
                 let kind = match req.kind {
-                    ImageServiceRequestKind::Info => handle_info_request(image)
-                        .await
-                        .map(ImageServiceResponseKind::Info),
+                    ImageServiceRequestKind::Info => {
+                        handle_info_request(image).await.map(ImageServiceResponseKind::Info)
+                    }
                     ImageServiceRequestKind::Image(params) => handle_image_request(image, params)
                         .await
                         .map(ImageServiceResponseKind::Image),
@@ -188,10 +182,7 @@ impl Service<ImageServiceRequest> for ImageService {
         )
     }
 
-    fn poll_ready(
-        &mut self,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 }
@@ -203,10 +194,7 @@ async fn handle_info_request(mut image: BoxedImage) -> Result<ImageInfo, ImageSe
 }
 
 #[tracing::instrument(err, skip(image))]
-async fn handle_image_request(
-    image: BoxedImage,
-    params: ImageParameters,
-) -> Result<ImageStream, ImageServiceError> {
+async fn handle_image_request(image: BoxedImage, params: ImageParameters) -> Result<ImageStream, ImageServiceError> {
     let pipeline = TranscodingPipeline { image, params };
 
     Ok(pipeline.run())

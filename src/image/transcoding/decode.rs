@@ -25,7 +25,6 @@ pub fn decode_task(
         .flatten()
         .unwrap_or(512);
 
-    // Process up to 32 scanlines at a time
     let buffer_capacity = info.width as usize * scanlines as usize * 3;
     let mut buffer = BytesMut::with_capacity(buffer_capacity);
 

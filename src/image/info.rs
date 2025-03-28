@@ -1,3 +1,4 @@
+use super::Dimensions2;
 use crate::iiif::Dimension;
 
 #[allow(unused)]
@@ -32,6 +33,12 @@ pub struct ImageInfo {
 
     /// The license or rights statement that applies to the image.
     pub rights: Option<String>,
+}
+
+impl ImageInfo {
+    pub fn dimensions(&self) -> Dimensions2 {
+        Dimensions2 { width: self.width, height: self.height }
+    }
 }
 
 #[allow(unused)]

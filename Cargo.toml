@@ -94,35 +94,35 @@ opendal = { version = "0.52", optional = true, features = [
     "services-fs",
     "internal-path-cache",
 ] }
-opentelemetry = { version = "0.28", features = ["trace", "metrics"] }
-opentelemetry-appender-tracing = { version = "0.28", features = [
+opentelemetry = { version = "0.29", features = ["trace", "metrics"] }
+opentelemetry-appender-tracing = { version = "0.29", features = [
     "tracing-opentelemetry",
     "experimental_metadata_attributes",
     "experimental_use_tracing_span_context",
 ] }
 opentelemetry-aws = "0.16.0"
-opentelemetry-http = { version = "0.28" }
-opentelemetry_sdk = { version = "0.28", default-features = false, features = [
+opentelemetry-http = { version = "0.29" }
+opentelemetry_sdk = { version = "0.29", default-features = false, features = [
     "trace",
     "rt-tokio",
     "experimental_trace_batch_span_processor_with_async_runtime",
     "experimental_logs_batch_log_processor_with_async_runtime",
 ] }
-opentelemetry-otlp = { version = "0.28", default-features = false, features = [
+opentelemetry-otlp = { version = "0.29", default-features = false, features = [
     "trace",
     "logs",
     "http-proto",
     "reqwest-client",
 ] }
 opentelemetry-resource-detectors = "0.7"
-opentelemetry-semantic-conventions = { version = "0.28", features = [
+opentelemetry-semantic-conventions = { version = "0.29", features = [
     "semconv_experimental",
 ] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 tracing = { version = "0.1" }
 tracing-error = { version = "0.2" }
-tracing-opentelemetry = { version = "0.29" }
+tracing-opentelemetry = { version = "0.30" }
 tracing-opentelemetry-instrumentation-sdk = { version = "0.26.0", features = [
     "http",
     "tracing_level_info",

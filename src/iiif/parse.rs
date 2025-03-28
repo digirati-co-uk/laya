@@ -43,9 +43,7 @@ impl FromStr for ImageServiceRequest {
         let identifier = segments
             .next()
             .ok_or(IiifRequestError::UriMissingElement("identifier"))
-            .and_then(|input| {
-                urlencoding::decode(input).map_err(|_| IiifRequestError::UriNotUtf8("identifier"))
-            })?;
+            .and_then(|input| urlencoding::decode(input).map_err(|_| IiifRequestError::UriNotUtf8("identifier")))?;
 
         let is_info_request = segments.peek().is_some_and(|s| *s == "info.json");
         if is_info_request {
@@ -76,28 +74,20 @@ impl FromStr for ImageServiceRequest {
             .split_once('.')
             .ok_or(IiifRequestError::UriMissingElement("format"))?;
 
-        let quality = quality
-            .parse::<Quality>()
-            .map_err(IiifRequestError::ParseError)?;
+        let quality = quality.parse::<Quality>().map_err(IiifRequestError::ParseError)?;
 
-        let format = format
-            .parse::<Format>()
-            .map_err(IiifRequestError::ParseError)?;
+        let format = format.parse::<Format>().map_err(IiifRequestError::ParseError)?;
 
         Ok(ImageServiceRequest::image(identifier, region, size, rotation, quality, format))
     }
 }
 
-fn parse_region_selectors<T: SpatialSelector>(
-    input: &str,
-) -> Result<[T; REGION_SELECTOR_COUNT], ParseError> {
+fn parse_region_selectors<T: SpatialSelector>(input: &str) -> Result<[T; REGION_SELECTOR_COUNT], ParseError> {
     let mut selectors = [T::default(); REGION_SELECTOR_COUNT];
     let mut split = input.split(",");
 
     for (index, item) in selectors.iter_mut().enumerate() {
-        let s = split
-            .next()
-            .ok_or(ParseError::RegionSelectorCount(input.into()))?;
+        let s = split.next().ok_or(ParseError::RegionSelectorCount(input.into()))?;
 
         *item = s
             .parse::<T>()
@@ -169,15 +159,10 @@ impl FromStr for Size {
             return Err(ParseError::SizeMissingDimensions(s.into()));
         }
 
-        let (width, height) = s
-            .split_once(',')
-            .ok_or(ParseError::SizeMissingComma(s.into()))?;
+        let (width, height) = s.split_once(',').ok_or(ParseError::SizeMissingComma(s.into()))?;
 
         let scale = if preserve_ratio {
-            Scale::AspectPreserving {
-                width: parse_scale_px(width)?,
-                height: parse_scale_px(height)?,
-            }
+            Scale::AspectPreserving { width: parse_scale_px(width)?, height: parse_scale_px(height)? }
         } else {
             let width = if width.is_empty() {
                 None
@@ -446,10 +431,7 @@ mod test {
         );
 
         let result = "5,5,5,".parse::<Region>();
-        assert_eq!(
-            result,
-            Err(ParseError::RegionSelectorUnparsable { input: "".into(), index: 3 })
-        );
+        assert_eq!(result, Err(ParseError::RegionSelectorUnparsable { input: "".into(), index: 3 }));
     }
 
     #[test]
@@ -488,10 +470,7 @@ mod test {
         assert_eq!(result, Ok(Size::upscaled(Scale::Percentage(200.0))));
 
         let result = "^3840,2160".parse::<Size>();
-        assert_eq!(
-            result,
-            Ok(Size::upscaled(Scale::fixed(NonZero::new(3840), NonZero::new(2160))))
-        );
+        assert_eq!(result, Ok(Size::upscaled(Scale::fixed(NonZero::new(3840), NonZero::new(2160)))));
     }
 
     #[test]

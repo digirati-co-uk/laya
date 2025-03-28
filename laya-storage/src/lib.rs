@@ -18,9 +18,17 @@ impl<T: AsyncRead + AsyncSeek> SeekableStream for T {}
 /// This structure represents a stored object with optional metadata
 /// such as a name and last modification time, along with its contents.
 pub struct StorageObject {
+    /// A handle to the contents of this object.
     pub content: FileOrStream,
+
+    /// An optional date representing the last time this object was modified, allowing downstream
+    /// clients to cache the result.
     pub last_modified: Option<SystemTime>,
+
+    /// The media type of this storage object.
     pub media_type: MediaTypeBuf,
+
+    /// An optional name associated with the storage object.
     pub name: Option<String>,
 }
 
@@ -35,8 +43,80 @@ pub trait StorageProvider: Send + Sync {
     where
         'a: 'fut;
 
+    /// Check if this storage provider is ready to begin/still able to service
+    /// [StorageProvider::open] requests.
     fn healthcheck(&self) -> Pin<Box<dyn Future<Output = Result<(), StorageError>> + Send>> {
         Box::pin(futures::future::ready(Ok(())))
+    }
+}
+
+/// A path to a file encapsulated with a factory method that can provide an asynchronous stream if
+/// necessary.
+pub struct FileStream {
+    pub path: Box<Path>,
+    pub stream_factory: FileStreamProvider,
+}
+
+/// A source of data, coming from a local file or asynchronous stream.
+///
+/// This enum represents the different data can be loaded.
+///
+/// The reason [FileOrStream::File] and [FileOrStream::Stream] are separate despite [SeekableStream]
+/// being able to represent a file is so decoders can decide to make optimizations
+/// based on direct filesystem access, such as using memory mapped files or
+/// DMA.
+///
+/// If the data source does not optimize for locally available files, a `Box<dyn SeekableStream>`
+/// can be obtained from [FileOrStream::as_stream()]
+pub enum FileOrStream {
+    /// Storage represented by a file on the filesystem.
+    File(FileStream),
+
+    /// Storage represented by a seekable stream.
+    Stream(Box<dyn SeekableStream + Send>),
+}
+
+impl FileOrStream {
+    /// Get the contents of this value as an asynchronus stream, regardless of local availability.
+    pub fn as_stream(self) -> Box<dyn SeekableStream> {
+        match self {
+            FileOrStream::File(stream) => (stream.stream_factory)(&stream.path),
+            FileOrStream::Stream(stream) => stream,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum StorageError {
+    /// The [StorageProvider] implementation lacks the credentials to access the given object.
+    AccessDenied,
+
+    /// An internal and irrecoverable storage adapter error occurred.
+    Internal(Box<dyn Error + Send + Sync>),
+
+    /// A [StorageObject] with the given identifier could not be found in the storage.
+    NotFound,
+
+    /// Generic storage adapter implementation errors.
+    Other(String),
+
+    /// A [StorageObject] was found in storage, but the type of object could not be identified.
+    UnknownFormat,
+}
+
+impl Error for StorageError {}
+
+impl Display for StorageError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StorageError::AccessDenied => write!(f, "access was denied"),
+            StorageError::NotFound => write!(f, "data could not be found"),
+            StorageError::Other(reason) => write!(f, "other: {reason}"),
+            StorageError::Internal(e) => write!(f, "{}", e),
+            StorageError::UnknownFormat => {
+                write!(f, "the file format of the storage object is unknown")
+            }
+        }
     }
 }
 
@@ -61,66 +141,5 @@ impl StorageProvider for Box<dyn StorageProvider> {
         'a: 'fut,
     {
         <dyn StorageProvider>::open(self, id)
-    }
-}
-
-/// A path to a file encapsulated with a factory method that can provide an asynchronous stream if
-/// necessary.
-pub struct FileStream {
-    pub path: Box<Path>,
-    pub stream_factory: FileStreamProvider,
-}
-
-/// A source of data, coming from a local file or asynchronous stream.
-///
-/// This enum represents the different data can be loaded.
-///
-/// The reason `File` and `Stream` are separate despite `AsyncRead` being
-/// able to represent a file is so decoders can decide to make optimizations
-/// based on direct filesystem access, such as using memory mapped files or
-/// DMA.
-///
-/// If the data source does not optimize for locally available files, a `Box<dyn AsyncRead>` can be
-/// obtained from [FileOrStream::as_stream()]
-pub enum FileOrStream {
-    /// Storage represented by a file on the filesystem.
-    File(FileStream),
-
-    /// Storage represented by a seekable stream.
-    Stream(Box<dyn SeekableStream + Send>),
-}
-
-impl FileOrStream {
-    /// Get the contents of this value as an asynchronus stream, regardless of local availability.
-    pub fn as_stream(self) -> Box<dyn SeekableStream> {
-        match self {
-            FileOrStream::File(stream) => (stream.stream_factory)(&stream.path),
-            FileOrStream::Stream(stream) => stream,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum StorageError {
-    AccessDenied,
-    Internal(Box<dyn Error + Send + Sync>),
-    NotFound,
-    Other(String),
-    UnknownFormat,
-}
-
-impl Error for StorageError {}
-
-impl Display for StorageError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            StorageError::AccessDenied => write!(f, "access was denied"),
-            StorageError::NotFound => write!(f, "data could not be found"),
-            StorageError::Other(reason) => write!(f, "other: {reason}"),
-            StorageError::Internal(e) => write!(f, "{}", e),
-            StorageError::UnknownFormat => {
-                write!(f, "the file format of the storage object is unknown")
-            }
-        }
     }
 }

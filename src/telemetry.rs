@@ -12,7 +12,7 @@ use opentelemetry_sdk::logs::SdkLoggerProvider;
 use opentelemetry_sdk::logs::log_processor_with_async_runtime::BatchLogProcessor;
 use opentelemetry_sdk::resource::EnvResourceDetector;
 use opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor;
-use opentelemetry_sdk::trace::{Sampler, SdkTracerProvider};
+use opentelemetry_sdk::trace::{RandomIdGenerator, Sampler, SdkTracerProvider};
 use opentelemetry_sdk::{Resource, runtime};
 use opentelemetry_semantic_conventions::resource::SERVICE_VERSION;
 use tokio::runtime::Runtime;
@@ -26,11 +26,7 @@ use tracing_subscriber::{EnvFilter, Layer};
 fn resource() -> Resource {
     Resource::builder()
         .with_service_name(env!("CARGO_PKG_NAME"))
-        .with_detectors(&[
-            Box::new(OsResourceDetector),
-            Box::new(ProcessResourceDetector),
-            Box::new(EnvResourceDetector::new()),
-        ])
+        .with_detectors(&[Box::new(EnvResourceDetector::new())])
         .with_attribute(KeyValue::new(SERVICE_VERSION, env!("CARGO_PKG_VERSION")))
         .build()
 }
@@ -66,16 +62,11 @@ pub fn install_telemetry_collector(disable_otel: bool) -> TelemetryHandle {
     let _rt = rt.enter();
 
     let (tracer_provider, logger_provider) = if !disable_otel {
-        global::set_text_map_propagator(XrayPropagator::new());
-
-        let exporter = opentelemetry_otlp::SpanExporter::builder()
-            .with_http()
-            .build()
-            .unwrap();
+        let exporter = opentelemetry_otlp::SpanExporter::builder().with_http().build().unwrap();
 
         let tracer_provider = SdkTracerProvider::builder()
             .with_sampler(Sampler::AlwaysOn)
-            .with_id_generator(XrayIdGenerator::default())
+            .with_id_generator(RandomIdGenerator::default())
             .with_resource(resource())
             .with_span_processor(BatchSpanProcessor::builder(exporter, runtime::Tokio).build())
             .build();
@@ -100,11 +91,6 @@ pub fn install_telemetry_collector(disable_otel: bool) -> TelemetryHandle {
 
     tracing_subscriber::registry()
         .with(ErrorLayer::default())
-        .with(match formatter.as_str() {
-            "compact" => formatting_layer.compact().boxed(),
-            "json" => formatting_layer.json().boxed(),
-            _ => formatting_layer.pretty().boxed(),
-        })
         .with(
             EnvFilter::builder()
                 .with_default_directive(Level::INFO.into())
@@ -120,11 +106,12 @@ pub fn install_telemetry_collector(disable_otel: bool) -> TelemetryHandle {
                 .clone()
                 .map(|provider| OpenTelemetryLayer::new(provider.tracer("tracing-otel"))),
         )
-        .with(
-            logger_provider
-                .as_ref()
-                .map(OpenTelemetryTracingBridge::new),
-        )
+        .with(logger_provider.as_ref().map(OpenTelemetryTracingBridge::new))
+        .with(match formatter.as_str() {
+            "compact" => formatting_layer.compact().boxed(),
+            "json" => formatting_layer.json().boxed(),
+            _ => formatting_layer.pretty().boxed(),
+        })
         .init();
 
     TelemetryHandle { rt, tracing_provider: tracer_provider.clone(), logger_provider }

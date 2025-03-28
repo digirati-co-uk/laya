@@ -8,6 +8,7 @@ pub mod storage {
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use byte_unit::Byte;
@@ -21,6 +22,7 @@ use iiif::service::ImageService;
 use kaduceus::KakaduContext;
 use laya_storage_dlcs::DlcsStorageProvider;
 use opentelemetry_http::HeaderExtractor;
+use tokio::runtime::Builder;
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
@@ -30,9 +32,7 @@ use tracing::field::Empty;
 use tracing::{Level, info_span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 use tracing_opentelemetry_instrumentation_sdk::http::http_server::update_span_from_response;
-use tracing_opentelemetry_instrumentation_sdk::http::{
-    http_flavor, http_host, http_method, url_scheme, user_agent,
-};
+use tracing_opentelemetry_instrumentation_sdk::http::{http_flavor, http_host, http_method, url_scheme, user_agent};
 
 use crate::image::reader::KaduceusImageReader;
 
@@ -112,11 +112,7 @@ pub struct KakaduOptions {
 #[derive(clap::Args, Clone, Debug)]
 pub struct StorageOptions {
     /// The location the image server expects to find image files at on a local filesystem.
-    #[arg(
-        long("fs-storage-path"),
-        default_value("test-data"),
-        help_heading("Storage")
-    )]
+    #[arg(long("fs-storage-path"), default_value("test-data"), help_heading("Storage"))]
     fs_storage_path: PathBuf,
 }
 
@@ -124,11 +120,7 @@ pub struct StorageOptions {
 pub struct TokioRuntimeOptions {
     /// Specifies the number of threads allocated to HTTP listener sockets.
     /// This controls the concurrency of the socket accept operations.
-    #[arg(
-        long("tokio-listener-threads"),
-        help_heading("Tokio"),
-        default_value("1")
-    )]
+    #[arg(long("tokio-listener-threads"), help_heading("Tokio"), default_value("1"))]
     listener_threads: usize,
 
     /// Specifies the number of threads allocated to file and network I/O operations.
@@ -143,8 +135,10 @@ fn main() -> color_eyre::Result<()> {
     let options = LayaOptions::parse();
     let telemetry = telemetry::install_telemetry_collector(options.disable_opentelemetry);
 
+    // Set the executor up here so any image reader panics don't result in a nested Runtine drop
+    let kdu_executor = Arc::new(Builder::new_multi_thread().enable_all().build().unwrap());
     let kdu_context = KakaduContext::default();
-    let kdu_image_reader = KaduceusImageReader::new(kdu_context);
+    let kdu_image_reader = KaduceusImageReader::new(kdu_context, kdu_executor.clone());
 
     let image_service = ImageService::new(
         DlcsStorageProvider::new(options.storage_options.fs_storage_path.clone()),
@@ -164,7 +158,8 @@ fn main() -> color_eyre::Result<()> {
                         http.request.method = %http_method,
                         network.protocol.version = %http_flavor(req.version()),
                         server.address = http_host(req),
-                        server.port = ?req.uri().port(),
+                        server.port = Empty,
+                        http.route = Empty,
                         http.client.address = Empty,
                         user_agent.original = user_agent(req),
                         http.response.status_code = Empty,
@@ -178,9 +173,8 @@ fn main() -> color_eyre::Result<()> {
                     );
 
                     let extractor = HeaderExtractor(req.headers());
-                    let context = opentelemetry::global::get_text_map_propagator(|propagator| {
-                        propagator.extract(&extractor)
-                    });
+                    let context =
+                        opentelemetry::global::get_text_map_propagator(|propagator| propagator.extract(&extractor));
                     span.set_parent(context);
                     span
                 })
@@ -189,11 +183,7 @@ fn main() -> color_eyre::Result<()> {
                 })
                 .on_eos(DefaultOnEos::default().level(Level::INFO)),
         )
-        .layer(
-            CorsLayer::new()
-                .allow_methods([Method::GET])
-                .allow_origin(Any),
-        )
+        .layer(CorsLayer::new().allow_methods([Method::GET]).allow_origin(Any))
         .layer(TimeoutLayer::new(Duration::from_secs(10)))
         .service(http_service);
 

@@ -12,7 +12,6 @@ pub fn encode_task(
     output_size: Dimensions,
     mut input_channel: Receiver<Bytes>,
     output_channel: Sender<Bytes>,
-    info: ImageInfo,
 ) -> Result<(), TranscodingError> {
     std::panic::catch_unwind(move || {
         let (width, height) = output_size;

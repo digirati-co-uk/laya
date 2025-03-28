@@ -21,11 +21,8 @@ pub struct KaduceusImageReader {
 }
 
 impl KaduceusImageReader {
-    pub fn new(context: KakaduContext) -> Self {
-        Self {
-            context,
-            executor: Arc::new(Builder::new_multi_thread().enable_all().build().unwrap()),
-        }
+    pub fn new(context: KakaduContext, executor: Arc<Runtime>) -> Self {
+        Self { context, executor }
     }
 }
 
@@ -42,10 +39,7 @@ impl Image for KakaduImage {
         for level in 0..info.dwt_levels {
             let scaling_factor = 1 << (info.dwt_levels - level);
 
-            sizes.push(PreferredSize {
-                width: info.width / scaling_factor,
-                height: info.height / scaling_factor,
-            });
+            sizes.push(PreferredSize { width: info.width / scaling_factor, height: info.height / scaling_factor });
         }
 
         ImageInfo {
@@ -61,19 +55,10 @@ impl Image for KakaduImage {
         }
     }
 
-    fn open_region(
-        &mut self,
-        region: AbsoluteRegion,
-        scaled_to: (Dimension, Dimension),
-    ) -> Box<dyn ImageDecoder> {
+    fn open_region(&mut self, region: AbsoluteRegion, scaled_to: (Dimension, Dimension)) -> Box<dyn ImageDecoder> {
         let info = self.info();
         let (scaled_width, scaled_height) = scaled_to;
-        let kdu_region = kaduceus::Region {
-            x: region.x,
-            y: region.y,
-            width: region.width,
-            height: region.height,
-        };
+        let kdu_region = kaduceus::Region { x: region.x, y: region.y, width: region.width, height: region.height };
 
         let decompressor = KakaduImage::open_region(self, kdu_region, scaled_width, scaled_height);
 
@@ -87,9 +72,7 @@ impl ImageDecoder for KakaduDecompressor {
 
         info!("starting region decode");
         // SAFETY: the buffer is never read by `process`
-        let uninit_buf = unsafe {
-            std::mem::transmute::<&mut [std::mem::MaybeUninit<u8>], &mut [u8]>(&mut uninit[..])
-        };
+        let uninit_buf = unsafe { std::mem::transmute::<&mut [std::mem::MaybeUninit<u8>], &mut [u8]>(&mut uninit[..]) };
 
         let region = self.process(uninit_buf).unwrap();
 
@@ -126,9 +109,7 @@ impl ImageReader for KaduceusImageReader {
             tokio::task::spawn_blocking(move || {
                 span.in_scope(|| {
                     let stream = match location {
-                        FileOrStream::File(file) => {
-                            Box::into_pin((file.stream_factory)(&file.path))
-                        }
+                        FileOrStream::File(file) => Box::into_pin((file.stream_factory)(&file.path)),
                         FileOrStream::Stream(reader) => Box::into_pin(reader),
                     };
 

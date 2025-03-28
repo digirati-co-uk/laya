@@ -9,7 +9,6 @@ use decode::decode_task;
 use encode::encode_task;
 use futures::stream::Fuse;
 use futures::{Stream, StreamExt};
-use gcd::Gcd;
 use mediatype::MediaTypeBuf;
 use mediatype::names::{IMAGE, JPEG};
 use tokio::sync::mpsc::{self, Sender};
@@ -18,9 +17,8 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, info_span};
 
-use super::{AbsoluteRegion, BoxedImage, ImageStream};
+use super::{BoxedImage, ImageStream};
 use crate::iiif::service::ImageParameters;
-use crate::iiif::{Region, Scale};
 
 pub mod decode;
 pub mod encode;
@@ -110,14 +108,13 @@ impl Write for SenderWriter {
 
     fn flush(&mut self) -> std::io::Result<()> {
         self.sender
-            .blocking_send(
-                std::mem::replace(&mut self.buffer, BytesMut::with_capacity(4096 * 16)).freeze(),
-            )
+            .blocking_send(std::mem::replace(&mut self.buffer, BytesMut::with_capacity(4096 * 16)).freeze())
             .map_err(std::io::Error::other)
     }
 }
 
 impl TranscodingPipeline {
+    #[tracing::instrument(skip(self), fields(params = ?self.params))]
     pub fn run(self) -> ImageStream {
         let Self { mut image, params } = self;
 
@@ -125,54 +122,19 @@ impl TranscodingPipeline {
         let token = CancellationToken::new();
         let mut task_set = JoinSet::new();
 
-        let absolute_region = match params.region {
-            Region::Absolute { x, y, width, height } => AbsoluteRegion { x, y, width, height },
-            Region::Full => AbsoluteRegion { x: 0, y: 0, width: info.width, height: info.height },
-            _ => todo!(),
-        };
+        let crop = info
+            .dimensions()
+            .crop_and_scale(params.region, params.size.scale())
+            .expect("cropping image resulted in invalid dimensions");
 
-        let dims_gcd = info.width.gcd(info.height);
-        let ratio_w = info.width / dims_gcd;
-        let ratio_h = info.height / dims_gcd;
-
-        let size = match params.size.scale() {
-            Scale::Max => (absolute_region.width, absolute_region.height),
-            Scale::Fixed { width: scaled_width, height: scaled_height } => {
-                (scaled_width.get(), scaled_height.get())
-            }
-            Scale::FixedWidth(scaled_width) => {
-                (scaled_width.get(), (scaled_width.get() * ratio_h) / ratio_w)
-            }
-            Scale::FixedHeight(scaled_height) => {
-                ((scaled_height.get() * ratio_w) / ratio_h, scaled_height.get())
-            }
-            Scale::Percentage(pct) => {
-                let scaled_x = absolute_region.width as f32 / 100.0 * pct;
-                let scaled_y = absolute_region.height as f32 / 100.0 * pct;
-
-                (scaled_x.ceil() as u32, scaled_y.ceil() as u32)
-            }
-            Scale::AspectPreserving { width, height } => {
-                let scale_w = height.get() as f64 / absolute_region.width as f64;
-                let scale_h = width.get() as f64 / absolute_region.height as f64;
-                let scale = scale_w.min(scale_h);
-
-                let new_w = (absolute_region.width as f64 * scale).ceil() as u32;
-                let new_h = (absolute_region.height as f64 * scale).ceil() as u32;
-
-                (new_w, new_h)
-            }
-        };
-
-        info!("Calculated dimensions ({size:?}) for scale params: {:?}", params.size.scale());
+        info!("Image is being cropped to {crop:?}");
 
         let decoder_token = token.clone();
         let decoder_span = info_span!("image_decoder", decoder = "kakadu");
         let (decoded_tx, decoded_rx) = mpsc::channel(4);
 
         task_set.spawn_blocking(move || -> Result<(), TranscodingError> {
-            decoder_span
-                .in_scope(|| decode_task(decoder_token, image, absolute_region, size, decoded_tx))
+            decoder_span.in_scope(|| decode_task(decoder_token, image, crop.hires_region, crop.scale, decoded_tx))
         });
 
         let encoder_token = token.clone();
@@ -180,16 +142,12 @@ impl TranscodingPipeline {
         let (encoded_tx, encoded_rx) = mpsc::channel(4);
 
         task_set.spawn_blocking(move || -> Result<(), TranscodingError> {
-            encoder_span.in_scope(|| encode_task(encoder_token, size, decoded_rx, encoded_tx, info))
+            encoder_span.in_scope(|| encode_task(encoder_token, crop.scale, decoded_rx, encoded_tx))
         });
 
         ImageStream {
             media_type: MediaTypeBuf::new(IMAGE, JPEG),
-            data: Box::new(TranscodedStream {
-                task_set,
-                token,
-                receiver: ReceiverStream::new(encoded_rx).fuse(),
-            }),
+            data: Box::new(TranscodedStream { task_set, token, receiver: ReceiverStream::new(encoded_rx).fuse() }),
         }
     }
 }
