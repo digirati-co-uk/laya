@@ -159,6 +159,7 @@ async fn open(storage: &DlcsStorageProvider, path: String) -> Result<StorageObje
             Operator::new(Fs::default().root(storage.local_path.to_str().expect("invalid root path provided")))
                 .map_err(convert_opendal_error)?
                 .layer(MimeGuessLayer::default())
+                .layer(RetryLayer::new())
                 .finish(),
             path.to_string(),
         ),
