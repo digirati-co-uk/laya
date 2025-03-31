@@ -154,7 +154,7 @@ mimalloc = { version = "0.1", optional = true }
 gcd = "2.3.0"
 reqwest = "0.12.15"
 reqsign = "0.16.1"
-aws-config = "1.6.0"
+aws-config = "1.6.1"
 aws-credential-types = "1.2.2"
 async-trait = "0.1.88"
 anyhow = "1.0.97"
