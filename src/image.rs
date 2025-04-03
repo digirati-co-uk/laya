@@ -16,6 +16,7 @@ use crate::iiif::{Dimension, Region, Scale};
 
 pub type Dimensions = (Dimension, Dimension);
 
+#[derive(Debug)]
 pub struct Dimensions2 {
     width: Dimension,
     height: Dimension,
@@ -33,6 +34,7 @@ pub struct Crop {
 }
 
 impl Dimensions2 {
+    #[tracing::instrument]
     pub fn crop_and_scale(self, region: Region, scale: Scale) -> Option<Crop> {
         let Self { width, height } = self;
         let rect = match region {
@@ -53,14 +55,16 @@ impl Dimensions2 {
                 (NonZero::new(scaled_x as u32)?.get(), NonZero::new(scaled_y as u32)?.get())
             }
             Scale::AspectPreserving { width: target_width, height: target_height } => {
-                let image_ar = rect.width as f64 / rect.height as f64;
+                let image_ar = width as f64 / height as f64;
+                let target_width = target_width.get().min(rect.width);
+                let target_height = target_height.get().min(rect.height);
+                let scaled_h = (target_width as f64 * image_ar).round() as u32;
 
-                let scaled_h = (target_width.get() as f64 * image_ar).round() as u32;
-                if scaled_h <= target_height.get() {
-                    (target_width.get(), NonZero::new(scaled_h)?.get())
+                if scaled_h <= target_height {
+                    (target_width, NonZero::new(scaled_h)?.get())
                 } else {
-                    let scaled_w = (target_height.get() as f64 / image_ar).round() as u32;
-                    (NonZero::new(scaled_w)?.get(), target_height.get())
+                    let scaled_w = (target_width as f64 / image_ar).round() as u32;
+                    (NonZero::new(scaled_w)?.get(), target_height)
                 }
             }
         };
