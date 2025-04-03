@@ -63,7 +63,7 @@ impl Dimensions2 {
                 if scaled_h <= target_height {
                     (target_width, NonZero::new(scaled_h)?.get())
                 } else {
-                    let scaled_w = (target_height as f64 / image_ar).round() as u32;
+                    let scaled_w = (target_width as f64 / image_ar).round() as u32;
                     (NonZero::new(scaled_w)?.get(), target_height)
                 }
             }
