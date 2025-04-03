@@ -6,6 +6,8 @@ use std::str::FromStr;
 use std::task::Poll;
 
 use futures::StreamExt;
+use http::HeaderName;
+use http::header::VARY;
 use http_body::Frame;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
@@ -24,6 +26,12 @@ use super::service::{ImageServiceError, ImageServiceRequestKind, ImageServiceRes
 use crate::iiif::ImageServiceRequest;
 use crate::iiif::parse::ParseError as ImageRequestParseError;
 use crate::storage::StorageError;
+
+// Increment this when the cache for an entire deployment needs to be cleared (e.g. due to an image
+// processing bug)
+pub const LAYA_CACHE_COUNTER: u32 = 1;
+pub const LAYA_CACHE_COUNTER_HEADER_NAME: &str = "x-laya-cache-counter";
+pub const LAYA_CACHE_COUNTER_HEADER: HeaderName = HeaderName::from_static(LAYA_CACHE_COUNTER_HEADER_NAME);
 
 #[derive(Clone)]
 pub struct HttpImageService<S>
@@ -169,6 +177,9 @@ pub fn iiif_response(
 ) -> Result<HttpImageServiceResponse, hyper::http::Error> {
     let mut builder = Response::builder();
     let headers = builder.headers_mut().unwrap();
+
+    headers.append(VARY, HeaderValue::from_name(LAYA_CACHE_COUNTER_HEADER));
+    headers.append(LAYA_CACHE_COUNTER_HEADER, LAYA_CACHE_COUNTER.into());
 
     if let Some(Ok(value)) = response
         .last_modified_time
