@@ -6,7 +6,6 @@ use std::sync::Arc;
 use std::task::Poll;
 use std::time::SystemTime;
 
-use futures::FutureExt;
 use hyper::Request;
 use hyper::body::Incoming;
 use hyper::header::IF_MODIFIED_SINCE;

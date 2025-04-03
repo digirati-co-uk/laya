@@ -55,9 +55,8 @@ debug = "full"
 split-debuginfo = "packed"
 
 [features]
-default = ["rt-tokio", "kaduceus", "opendal", "mimalloc"]
+default = ["rt-tokio", "kaduceus", "mimalloc"]
 kaduceus = ["dep:kaduceus"]
-opendal = ["dep:opendal"]
 mimalloc = ["dep:mimalloc"]
 rt-tokio = ["dep:tokio"]
 rt-glommio = []
@@ -81,19 +80,13 @@ hyper-util = { version = "0.1", features = [
     "http1",
     "tokio",
 ] }
-opendal = { version = "0.52", optional = true, features = [
-    "layers-tracing",
-    "services-s3",
-    "services-fs",
-    "internal-path-cache",
-] }
 opentelemetry = { version = "0.29", features = ["trace", "metrics"] }
 opentelemetry-appender-tracing = { version = "0.29", features = [
     "tracing-opentelemetry",
     "experimental_metadata_attributes",
     "experimental_use_tracing_span_context",
 ] }
-opentelemetry-aws = "0.16.0"
+opentelemetry-aws = "0.17.0"
 opentelemetry-http = { version = "0.29" }
 opentelemetry_sdk = { version = "0.29", default-features = false, features = [
     "trace",
@@ -107,7 +100,7 @@ opentelemetry-otlp = { version = "0.29", default-features = false, features = [
     "http-proto",
     "reqwest-client",
 ] }
-opentelemetry-resource-detectors = "0.7"
+opentelemetry-resource-detectors = "0.8"
 opentelemetry-semantic-conventions = { version = "0.29", features = [
     "semconv_experimental",
 ] }
@@ -147,8 +140,6 @@ mimalloc = { version = "0.1", optional = true }
 gcd = "2.3.0"
 reqwest = "0.12.15"
 reqsign = "0.16.1"
-aws-config = "1.6.0"
-aws-credential-types = "1.2.2"
 async-trait = "0.1.88"
 anyhow = "1.0.97"
 http = "1.3.1"

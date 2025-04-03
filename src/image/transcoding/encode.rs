@@ -5,7 +5,6 @@ use tracing::info;
 
 use super::{SenderWriter, TranscodingError};
 use crate::image::Dimensions;
-use crate::image::info::ImageInfo;
 
 pub fn encode_task(
     cancellation_token: CancellationToken,

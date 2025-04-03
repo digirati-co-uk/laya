@@ -2,12 +2,9 @@ use std::env;
 use std::time::Duration;
 
 use opentelemetry::KeyValue;
-use opentelemetry::global::{self};
 use opentelemetry::trace::TracerProvider;
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
-use opentelemetry_aws::trace::{XrayIdGenerator, XrayPropagator};
 use opentelemetry_otlp::LogExporter;
-use opentelemetry_resource_detectors::{OsResourceDetector, ProcessResourceDetector};
 use opentelemetry_sdk::logs::SdkLoggerProvider;
 use opentelemetry_sdk::logs::log_processor_with_async_runtime::BatchLogProcessor;
 use opentelemetry_sdk::resource::EnvResourceDetector;

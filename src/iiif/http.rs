@@ -6,14 +6,12 @@ use std::str::FromStr;
 use std::task::Poll;
 
 use futures::StreamExt;
-use http::header::HOST;
-use http::uri::Authority;
 use http_body::Frame;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Empty, Full, StreamBody};
 use hyper::body::{Bytes, Incoming};
 use hyper::header::{CONTENT_TYPE, HeaderValue, IF_MODIFIED_SINCE, LAST_MODIFIED};
-use hyper::{Request, Response, StatusCode, Uri};
+use hyper::{Request, Response, StatusCode};
 use opentelemetry::KeyValue;
 use opentelemetry::trace::TraceContextExt;
 use opentelemetry_semantic_conventions::trace::HTTP_ROUTE;
@@ -82,7 +80,7 @@ where
     pub async fn decode_request(
         req: Request<Incoming>,
         prefix: String,
-        mut inner: S,
+        inner: S,
     ) -> Result<HttpImageServiceResponse, hyper::http::Error> {
         let request_path = req
             .uri()

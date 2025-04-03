@@ -6,7 +6,7 @@ use bytes::BytesMut;
 use kaduceus::{KakaduContext, KakaduDecompressor, KakaduImage};
 use mediatype::MediaType;
 use mediatype::names::{IMAGE, JP2};
-use tokio::runtime::{Builder, Runtime};
+use tokio::runtime::Runtime;
 use tracing::info;
 
 use super::ImageReader;
@@ -56,7 +56,6 @@ impl Image for KakaduImage {
     }
 
     fn open_region(&mut self, region: AbsoluteRegion, scaled_to: (Dimension, Dimension)) -> Box<dyn ImageDecoder> {
-        let info = self.info();
         let (scaled_width, scaled_height) = scaled_to;
         let kdu_region = kaduceus::Region { x: region.x, y: region.y, width: region.width, height: region.height };
 
