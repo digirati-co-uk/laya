@@ -21,7 +21,7 @@ generic = true
 [[workspace.metadata.distributions]]
 name = "arm64-generic"
 triple = "aarch64-unknown-linux-gnu"
-cpu = "neoverse-v2"
+cpu = "neoverse-v1"
 generic = true
 docker = "linux/arm64/v8"
 runner = "ubuntu-24.04-arm"
