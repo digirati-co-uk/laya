@@ -34,7 +34,7 @@ pub struct Crop {
 }
 
 impl Dimensions2 {
-    #[tracing::instrument]
+    #[tracing::instrument(ret)]
     pub fn crop_and_scale(self, region: Region, scale: Scale) -> Option<Crop> {
         let Self { width, height } = self;
         let rect = match region {
@@ -44,7 +44,7 @@ impl Dimensions2 {
         };
 
         let (target_width, target_height) = match scale {
-            Scale::Max => (width, height),
+            Scale::Max => (rect.width, rect.height),
             Scale::Fixed { width: scaled_width, height: scaled_height } => (scaled_width.get(), scaled_height.get()),
             Scale::FixedWidth(scaled_width) => (scaled_width.get(), (scaled_width.get() * height) / width),
             Scale::FixedHeight(scaled_height) => ((scaled_height.get() * width) / height, scaled_height.get()),
@@ -55,17 +55,15 @@ impl Dimensions2 {
                 (NonZero::new(scaled_x as u32)?.get(), NonZero::new(scaled_y as u32)?.get())
             }
             Scale::AspectPreserving { width: target_width, height: target_height } => {
-                let image_ar = width as f64 / height as f64;
-                let target_width = target_width.get().min(rect.width);
-                let target_height = target_height.get().min(rect.height);
-                let scaled_h = (target_width as f64 * image_ar).round() as u32;
+                let scale_w = target_width.get() as f64 / rect.width as f64;
+                let scale_h = target_height.get() as f64 / rect.height as f64;
 
-                if scaled_h <= target_height {
-                    (target_width, NonZero::new(scaled_h)?.get())
-                } else {
-                    let scaled_w = (target_width as f64 / image_ar).round() as u32;
-                    (NonZero::new(scaled_w)?.get(), target_height)
-                }
+                let scale = scale_w.min(scale_h);
+
+                let new_w = (width as f64 * scale).round() as u32;
+                let new_h = (height as f64 * scale).round() as u32;
+
+                (new_w, new_h)
             }
         };
 
