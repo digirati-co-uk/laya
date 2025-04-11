@@ -81,7 +81,7 @@ impl ImageDecoder for KakaduDecompressor {
 
         let complete = region.width == 0 || region.height == 0;
         if complete {
-            info!("decoded whole region");
+            info!(region=?region, "decoded whole region");
         } else {
             info!(region=?region, "processed a subregion");
         }
