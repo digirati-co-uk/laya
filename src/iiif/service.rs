@@ -103,6 +103,7 @@ impl ImageServiceRequest {
 pub enum ImageServiceError {
     Storage(StorageError),
     ReaderUnsupported(MediaTypeBuf),
+    SizeOutOfBounds,
 }
 
 impl Error for ImageServiceError {}
@@ -112,6 +113,9 @@ impl Display for ImageServiceError {
             ImageServiceError::Storage(err) => write!(f, "{}", err),
             ImageServiceError::ReaderUnsupported(ty) => {
                 write!(f, "no reader supports the media type ({}) of the image", ty.as_str())
+            }
+            ImageServiceError::SizeOutOfBounds => {
+                write!(f, "requested scale exceeds largest available image resolution")
             }
         }
     }

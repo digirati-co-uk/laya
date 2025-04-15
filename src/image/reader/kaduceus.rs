@@ -3,10 +3,12 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use bytes::BytesMut;
+use futures::FutureExt;
 use kaduceus::{KakaduContext, KakaduDecompressor, KakaduImage};
 use mediatype::MediaType;
 use mediatype::names::{IMAGE, JP2};
 use tokio::runtime::Runtime;
+use tokio_util::compat::TokioAsyncReadCompatExt as _;
 use tracing::info;
 
 use super::ImageReader;
@@ -104,16 +106,13 @@ impl ImageReader for KaduceusImageReader {
             let executor = self.executor.clone();
             let context = self.context.clone();
             let span = tracing::Span::current();
+            let stream = match location {
+                FileOrStream::File(file) => Box::pin(tokio::fs::File::open(file).await.unwrap().compat()),
+                FileOrStream::Stream(reader) => Box::into_pin(reader),
+            };
 
             tokio::task::spawn_blocking(move || {
-                span.in_scope(|| {
-                    let stream = match location {
-                        FileOrStream::File(file) => Box::into_pin((file.stream_factory)(&file.path)),
-                        FileOrStream::Stream(reader) => Box::into_pin(reader),
-                    };
-
-                    KakaduImage::new(executor, context, stream, name).boxed()
-                })
+                span.in_scope(|| KakaduImage::new(executor, context, stream, name).boxed())
             })
             .await
             .unwrap()

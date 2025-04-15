@@ -8,6 +8,9 @@ use std::time::SystemTime;
 use futures::{AsyncRead, AsyncSeek};
 use mediatype::MediaTypeBuf;
 
+mod fs;
+pub use fs::FilesystemStorageProvider;
+
 pub type FileStreamProvider = Box<dyn FnOnce(&Path) -> Box<dyn SeekableStream> + Send>;
 
 pub trait SeekableStream: AsyncRead + AsyncSeek {}
@@ -65,24 +68,17 @@ pub struct FileStream {
 /// being able to represent a file is so decoders can decide to make optimizations
 /// based on direct filesystem access, such as using memory mapped files or
 /// DMA.
-///
-/// If the data source does not optimize for locally available files, a `Box<dyn SeekableStream>`
-/// can be obtained from [FileOrStream::as_stream()]
 pub enum FileOrStream {
     /// Storage represented by a file on the filesystem.
-    File(FileStream),
+    File(Box<Path>),
 
     /// Storage represented by a seekable stream.
     Stream(Box<dyn SeekableStream + Send>),
 }
 
-impl FileOrStream {
-    /// Get the contents of this value as an asynchronus stream, regardless of local availability.
-    pub fn as_stream(self) -> Box<dyn SeekableStream> {
-        match self {
-            FileOrStream::File(stream) => (stream.stream_factory)(&stream.path),
-            FileOrStream::Stream(stream) => stream,
-        }
+impl From<std::io::Error> for StorageError {
+    fn from(value: std::io::Error) -> Self {
+        StorageError::Internal(Box::from(value))
     }
 }
 

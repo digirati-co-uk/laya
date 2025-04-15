@@ -147,6 +147,13 @@ where
 
             match inner.call(request).instrument(request_span).await {
                 Ok(response) => iiif_response(&image_id, &req, response),
+                Err(ImageServiceError::SizeOutOfBounds) => {
+                    warn!("Caller provided a larger size than the selected region");
+                    text_response(
+                        StatusCode::BAD_REQUEST,
+                        "Requested image dimensions exceed largest available resolution",
+                    )
+                }
                 Err(ImageServiceError::Storage(StorageError::NotFound)) => {
                     warn!("Unable to handle request for {image_id}, underlying storage wasn't found");
                     text_response(StatusCode::NOT_FOUND, "Image file not found")
