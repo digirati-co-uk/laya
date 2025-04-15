@@ -200,5 +200,5 @@ async fn handle_info_request(mut image: BoxedImage) -> Result<ImageInfo, ImageSe
 async fn handle_image_request(image: BoxedImage, params: ImageParameters) -> Result<ImageStream, ImageServiceError> {
     let pipeline = TranscodingPipeline { image, params };
 
-    Ok(pipeline.run())
+    pipeline.run()
 }

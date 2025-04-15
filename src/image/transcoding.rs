@@ -18,7 +18,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, info_span};
 
 use super::{BoxedImage, ImageStream};
-use crate::iiif::service::ImageParameters;
+use crate::iiif::service::{ImageParameters, ImageServiceError};
 
 pub mod decode;
 pub mod encode;
@@ -115,7 +115,7 @@ impl Write for SenderWriter {
 
 impl TranscodingPipeline {
     #[tracing::instrument(skip(self), fields(params = ?self.params))]
-    pub fn run(self) -> ImageStream {
+    pub fn run(self) -> Result<ImageStream, ImageServiceError> {
         let Self { mut image, params } = self;
 
         let info = image.info();
@@ -126,6 +126,11 @@ impl TranscodingPipeline {
             .dimensions()
             .crop_and_scale(params.region, params.size.scale())
             .expect("cropping image resulted in invalid dimensions");
+
+        let (scaled_x, scaled_y) = crop.scale;
+        if scaled_x > crop.hires_region.width || scaled_y > crop.hires_region.height {
+            return Err(ImageServiceError::SizeOutOfBounds);
+        }
 
         info!("Image is being cropped to {crop:?}");
 
@@ -145,10 +150,10 @@ impl TranscodingPipeline {
             encoder_span.in_scope(|| encode_task(encoder_token, crop.scale, decoded_rx, encoded_tx))
         });
 
-        ImageStream {
+        Ok(ImageStream {
             media_type: MediaTypeBuf::new(IMAGE, JPEG),
             data: Box::new(TranscodedStream { task_set, token, receiver: ReceiverStream::new(encoded_rx).fuse() }),
-        }
+        })
     }
 }
 
