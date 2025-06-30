@@ -3122,9 +3122,9 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.16.2"
+version = "0.16.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "295e00c4cc1e63e77796dc177c1d02f264bcc8b6b69488222ff6af16a061fcfc"
+checksum = "43451dbf3590a7590684c25fb8d12ecdcc90ed3ac123433e500447c7d77ed701"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3149,6 +3149,7 @@ dependencies = [
  "serde_json",
  "sha1",
  "sha2",
+ "tokio",
  "toml",
 ]
 
