@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 laya-storage = { path = "../laya-storage" }
 reqwest = "0.12.15"
-reqsign = "0.16.1"
+reqsign = "0.16.5"
 aws-config = "1.6.0"
 aws-credential-types = "1.2.2"
 opendal = { version = "0.52", features = ["layers-tracing", "services-s3", "services-fs", "internal-path-cache", "layers-mime-guess"] }
